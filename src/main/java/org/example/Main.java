@@ -29,7 +29,7 @@ import java.util.Collections;
 
 public class Main {
 
-    private static void uploadToUrl(String url, DatasetProfileMessage message) {
+    private static void uploadToUrl(String url, DatasetProfile message) {
         try{
             HttpURLConnection connection = (HttpURLConnection )new URL(url).openConnection();
             connection.setDoOutput(true);
@@ -38,7 +38,7 @@ public class Main {
 
             OutputStream out = connection.getOutputStream();
             try (out){
-               message.writeDelimitedTo(out);
+               message.toProtobuf().build().writeDelimitedTo(out);
             }
 
             if (connection.getResponseCode() != 200) {
@@ -56,7 +56,7 @@ public class Main {
         }
     }
 
-    private static void uploadDatasetProfileMessage(DatasetProfileMessage message){
+    private static void uploadDatasetProfileMessage(DatasetProfile message){
         ApiClient client = Configuration.getDefaultApiClient();
         client.setBasePath("https://api.whylabsapp.com");
         ApiKeyAuth auth = (ApiKeyAuth )client.getAuthentication("ApiKeyAuth");
@@ -67,7 +67,7 @@ public class Main {
                 .datasetTimestamp(Instant.now().toEpochMilli());
 
         try{
-            AsyncLogResponse response = api.logAsync("org-JpsdM6", "model-20", request);
+            AsyncLogResponse response = api.logAsync("org-JpsdM6", "model-23", request);
             String url = response.getUploadUrl();
             uploadToUrl(url, message);
         }catch(ApiException e){
@@ -76,66 +76,20 @@ public class Main {
         }
     }
 
-
-    public static DatasetProfileMessage prepareMetricsForUpload(DatasetProfile profile, RegressionMetrics metrics) {
-
-
-        DatasetProfileMessage.Builder builder = profile.toProtobuf().build().toBuilder();
-        ModelMetricsMessage.Builder metricBuilder = builder
-                .getModeProfile()
-                .getMetrics()
-                .toBuilder()
-                .setModelType(ModelType.UNKNOWN)
-                .setRegressionMetrics(metrics.toProtobuf());
-
-        ModelProfileMessage modelMessage = builder.getModeProfile()
-                .toBuilder()
-                .setMetrics(metricBuilder.build())
-                .build();
-
-        return builder.setModeProfile(modelMessage).build();
-    }
-
-    public static DatasetProfileMessage manualMethod() {
-        // Create a dataset profile with the given dataset timestamp.
-        Instant dataset_timestamp = Instant.now();
-        DatasetProfile profile = new DatasetProfile("", dataset_timestamp);
-
-        // Track some normal input/data
-        profile.track(ImmutableMap.of("col1", 3, "col2", 5));
-        profile.track(ImmutableMap.of("col1", 4, "col2", 5));
-
-        // Create a RegressionMetrics with the names of your prediction and target field.
-        RegressionMetrics metrics = new RegressionMetrics("prediction", "target");
-
-        // Track your performance data as a map
-        metrics.track(ImmutableMap.of("prediction", 1, "target", 1));
-        metrics.track(ImmutableMap.of("prediction", 2, "target", 1));
-
-        // Manually unpack the profile and set the model type and the metrics directly onto the proto message format.
-        // This is something that there isn't a "nice" way to do atm in whylogs java v0.
-        return prepareMetricsForUpload(profile, metrics);
-    }
-
-    public static DatasetProfileMessage automaticMethod() {
+    public static DatasetProfile automaticMethod() {
         DatasetProfile original = new DatasetProfile("test", Instant.now(), null, Collections.emptyMap(), Collections.emptyMap())
-                .withClassificationModel("pred", "target", "score", ImmutableList.of("additionalOutput"))
+                // Make sure to create a WhyLabs model that has type Regression as well or the performance metrics won't appear
                 .withRegressionModel("prediction", "target",ImmutableList.of("additionalOutput"));
 
-
-        original.track("col1", "value");
-        original.track("col1", 1);
-        original.track("col2", "value");
-        original.track(ImmutableMap.of("prediction", 1, "target", 1));
-        original.track(ImmutableMap.of("prediction", 2, "target", 1));
-        return original.toProtobuf().build();
+        // Make sure not to track prediction values that are null. Those have to be filtered out or things will break.
+        original.track(ImmutableMap.of("prediction", 1, "target", 1, "col1", 5.3, "col2", 7.8));
+        original.track(ImmutableMap.of("prediction", 2, "target", 1, "col1", 7.3, "col2", 17.8));
+        original.track(ImmutableMap.of("prediction", 3, "target", 1, "col1", 2.3, "col2", 78.8));
+        return original;
     }
 
     public static void main(String[] args) {
-        DatasetProfileMessage p1 = manualMethod();
-        DatasetProfileMessage p2 = automaticMethod();
-
-        uploadDatasetProfileMessage(p1);
-
+        DatasetProfile profile = automaticMethod();
+        uploadDatasetProfileMessage(profile);
     }
 }
