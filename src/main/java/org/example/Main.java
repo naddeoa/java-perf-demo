@@ -82,9 +82,15 @@ public class Main {
                 .withRegressionModel("prediction", "target",ImmutableList.of("additionalOutput"));
 
         // Make sure not to track prediction values that are null. Those have to be filtered out or things will break.
+        // You can log inputs/outputs together or separate. Make sure not to log inputs (col1, col2) twice in different places though.
         original.track(ImmutableMap.of("prediction", 1, "target", 1, "col1", 5.3, "col2", 7.8));
         original.track(ImmutableMap.of("prediction", 2, "target", 1, "col1", 7.3, "col2", 17.8));
         original.track(ImmutableMap.of("prediction", 3, "target", 1, "col1", 2.3, "col2", 78.8));
+
+        // Or separate
+        original.track(ImmutableMap.of("prediction", 1, "target", 1));
+        original.track(ImmutableMap.of("col1", 5.3, "col2", 7.8));
+
         return original;
     }
 
